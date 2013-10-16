@@ -55,5 +55,6 @@ const char *refl_get_annotation(func_t func, enum refl_annotation_type type);
 bool refl_each_annotation_next(func_t func, const struct refl_annotation **anno);
 void refl_call(func_t func, ...);
 void refl_call_verify(func_t func, const char *expsig, ...);
+void refl_call_sig(func_t func, const char *sig, ...);
 
 #endif
