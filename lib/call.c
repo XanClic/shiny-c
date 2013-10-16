@@ -23,6 +23,8 @@ extern uintptr_t __asm_call(func_t func, uintptr_t *iargv, int iargc, double *fp
 
 static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
 {
+    char ret_type = *sig;
+
     void *result_ptr = (sig[0] == 'v') ? NULL : va_arg(args, void *);
     while (!islower(*(sig++)));
 
@@ -72,7 +74,7 @@ static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
 
     __asm_call(e->vf, ib, ibi, fb, fbi);
 
-    switch (e->signature[0])
+    switch (ret_type)
     {
         case 'v': break;
         sir('c', char)
@@ -130,6 +132,21 @@ void refl_call_verify(func_t func, const char *expsig, ...)
         fprintf(stderr, "Cannot dynamically call function: Expected signature (%s) differs from actual one (%s)\n", expsig, sig);
         assert(0);
     }
+
+    raw_call(e, sig, args);
+
+    va_end(args);
+}
+
+
+void refl_call_sig(func_t func, const char *sig, ...)
+{
+    va_list args;
+    va_start(args, sig);
+
+    const struct vf_ht_entry *e = refl_hash_find(func);
+    assert(e);
+    assert(sig);
 
     raw_call(e, sig, args);
 
