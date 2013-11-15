@@ -37,5 +37,10 @@ int main(void)
     printf("=> call result: %g\n", result);
 
 
+    refl_foreach(vfunc)
+        if (!strcmp(refl_get_annotation(vfunc, 0) ?: "", "print"))
+            refl_dcall(vfunc, void, "And this is just doing it the simple (and boring) way.");
+
+
     return 0;
 }

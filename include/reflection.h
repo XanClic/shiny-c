@@ -45,6 +45,9 @@ struct refl_annotation
 #define refl_annotate(afunc, atype, adata) __annotate(afunc, atype, adata, __COUNTER__)
 
 
+#define refl_dcall(func, ret_type, ...) ((ret_type (*)())func)(__VA_ARGS__)
+
+
 bool refl_is_virtual(func_t func);
 void refl_assign(func_t dest, func_t src);
 func_t refl_find(const char *name);
