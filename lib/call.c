@@ -10,15 +10,17 @@
 #include "reflection_int.h"
 
 
-extern uintptr_t __asm_call(func_t func, uintptr_t *iargv, int iargc, double *fpargv, int fpargc);
+extern uintptr_t __asm_call(func_t func, uintptr_t *iargv, int iargc, void *fpargv, int fpargc);
 
 
 // fetch integer
 #define fi(c, type) case c: ib[ibi++] = (uintptr_t)va_arg(args, type); break;
 // store integer result
 #define sir(c, type) case c: *(type *)result_ptr = (type)ib[0]; break;
-// store floating point result
-#define sfr(c, type) case c: *(type *)result_ptr = (type)fb[0]; break;
+// store floating point result (single precision)
+#define sfr(c, type) case c: *(type *)result_ptr = (type)fb[0].f; break;
+// store floating point result (double precision)
+#define sdr(c, type) case c: *(type *)result_ptr = (type)fb[0].d; break;
 
 
 static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
@@ -29,12 +31,16 @@ static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
     while (!islower(*(sig++)));
 
     // integer block
-    uintptr_t *ib = malloc(6 * sizeof(*ib));
+    uintptr_t ib[6];
     // integer block index
     int ibi = 0;
 
     // floating point block
-    double *fb = malloc(8 * sizeof(*fb));
+    union
+    {
+        float f;
+        double d;
+    } fb[8];
     // floating point block index
     int fbi = 0;
 
@@ -60,10 +66,10 @@ static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
             fi('y', unsigned long long)
             fi('P', void *)
             case 'f':
-                *(float *)&fb[fbi++] = (float)va_arg(args, double);
+                fb[fbi++].f = va_arg(args, double);
                 break;
             case 'd':
-                fb[fbi++] = va_arg(args, double);
+                fb[fbi++].d = va_arg(args, double);
                 break;
             default:
                 assert(0);
@@ -90,13 +96,10 @@ static void raw_call(const struct vf_ht_entry *e, const char *sig, va_list args)
         sir('y', unsigned long long)
         sir('P', void *)
         sfr('f', float)
-        sfr('d', double)
+        sdr('d', double)
         default:
             assert(0);
     }
-
-    free(ib);
-    free(fb);
 }
 
 
