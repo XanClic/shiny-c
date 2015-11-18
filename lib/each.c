@@ -1,3 +1,4 @@
+#include <elf.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -11,9 +12,10 @@ bool refl_each_next(func_t *fptr)
 
     for (; i < __symtab_entries; i++)
     {
-        if ((ST_TYPE(__symtab[i].st_info) == STT_FUNCTION) && refl_is_virtual(__symtab[i].st_value))
+        uintptr_t value = __symtab[i].st_value + __relocation;
+        if ((ELF64_ST_TYPE(__symtab[i].st_info) == STT_FUNC) && refl_is_virtual(value))
         {
-            *fptr = __symtab[i].st_value;
+            *fptr = value;
             return true;
         }
     }
