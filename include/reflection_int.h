@@ -1,9 +1,9 @@
 #ifndef REFLECTION_INT_H
 #define REFLECTION_INT_H
 
+#include <elf.h>
 #include <stdint.h>
 
-#include "elf64.h"
 #include "reflection.h"
 
 
@@ -34,7 +34,7 @@ struct vf_ht_entry
 };
 
 
-extern uintptr_t __vmin, __vmax;
+extern uintptr_t __vmin, __vmax, __relocation;
 extern const char *__strtab;
 extern Elf64_Sym *__symtab;
 extern int __symtab_entries;

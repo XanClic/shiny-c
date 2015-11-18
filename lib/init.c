@@ -3,13 +3,13 @@
 #endif
 
 #include <assert.h>
+#include <elf.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
-#include "elf64.h"
 #include "reflection.h"
 #include "reflection_int.h"
 
@@ -18,7 +18,7 @@ void *__image;
 Elf64_Sym *__symtab;
 int __symtab_entries;
 const char *__strtab;
-uintptr_t __vmin, __vmax;
+uintptr_t __vmin, __vmax, __relocation;
 struct virt_trampoline *__trampolines;
 
 static const uint64_t trampoline_code[] = {
@@ -31,6 +31,12 @@ static const uint64_t trampoline_code[] = {
     0x5e5fa548a5480000,
     0x90900000000225ff
 };
+
+
+char get_relocation __attribute__((section("refl_get_relocation")));
+
+#define relocate(x) \
+    ((__typeof__(x))((uintptr_t)(x) + __relocation))
 
 
 static void collect(void) __attribute__((constructor));
@@ -50,7 +56,9 @@ static void collect(void)
     rewind(fp);
 
     void *buf = malloc(sz);
-    fread(buf, sz, 1, fp);
+    if (fread(buf, sz, 1, fp) < 1) {
+        abort();
+    }
     rewind(fp);
 
     Elf64_Ehdr *ehdr = buf;
@@ -81,11 +89,20 @@ static void collect(void)
             annotation_start = (const struct refl_annotation **)(shdr[i].sh_addr);
             annotation_end   = (const struct refl_annotation **)(shdr[i].sh_addr + shdr[i].sh_size);
         }
+        else if (!strcmp(shstrtab + shdr[i].sh_name, "refl_get_relocation"))
+        {
+            __relocation = (uintptr_t)&get_relocation - shdr[i].sh_addr;
+        }
     }
 
     assert(__symtab);
     assert(__strtab);
     assert(tmin && tmax);
+
+    tmin = relocate(tmin);
+    tmax = relocate(tmax);
+    annotation_start = relocate(annotation_start);
+    annotation_end   = relocate(annotation_end);
 
     int virt_func_count = 0;
 
@@ -94,14 +111,15 @@ static void collect(void)
 
     for (int i = 0; i < __symtab_entries; i++)
     {
-        if ((ST_TYPE(__symtab[i].st_info) == STT_FUNCTION) && (__symtab[i].st_value >= tmin) && (__symtab[i].st_value < tmax) && !(__symtab[i].st_value & 0xf))
+        uintptr_t value = relocate(__symtab[i].st_value);
+        if ((ELF64_ST_TYPE(__symtab[i].st_info) == STT_FUNC) && (value >= tmin) && (value < tmax) && !(value & 0xf))
         {
             virt_func_count++;
 
-            if (__symtab[i].st_value < __vmin)
-                __vmin = __symtab[i].st_value;
-            if (__symtab[i].st_value > __vmax)
-                __vmax = __symtab[i].st_value;
+            if (value < __vmin)
+                __vmin = value;
+            if (value > __vmax)
+                __vmax = value;
         }
     }
 
@@ -114,12 +132,13 @@ static void collect(void)
 
     for (int i = 0, vfi = 0; i < __symtab_entries; i++)
     {
-        if ((ST_TYPE(__symtab[i].st_info) == STT_FUNCTION) && refl_is_virtual(__symtab[i].st_value))
+        uintptr_t value = relocate(__symtab[i].st_value);
+        if ((ELF64_ST_TYPE(__symtab[i].st_info) == STT_FUNC) && refl_is_virtual(value))
         {
-            struct vf_ht_entry *e = refl_hash_insert(__symtab[i].st_value);
+            struct vf_ht_entry *e = refl_hash_insert(value);
 
             e->symtab_idx = i;
-            memcpy(e->prologue, (void *)__symtab[i].st_value, 16);
+            memcpy(e->prologue, (void *)value, 16);
             e->trampoline = &__trampolines[vfi++];
 
             *e->trampoline = (struct virt_trampoline){
@@ -133,7 +152,7 @@ static void collect(void)
                     trampoline_code[6],
                     trampoline_code[7]
                 },
-                .target = __symtab[i].st_value,
+                .target = value,
                 .prologue = {
                     e->prologue[0],
                     e->prologue[1]
